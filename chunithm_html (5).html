@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
+<title>CHUNITHM Planner</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#000;display:flex;justify-content:center;font-family:'Segoe UI',sans-serif;}
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-thumb{background:#7C3AED55;border-radius:99px;}
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;}
+select option{background:#1A1A35;color:#E0E0FF;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef}=React;
+
+const TH={
+  dark:{bg:"#0A0A1A",card:"#12122A",card2:"#1A1A35",purple:"#7C3AED",purpleL:"#A855F7",mint:"#34D399",pink:"#F472B6",gold:"#FFD700",white:"#F0F0FF",muted:"#6B7280",border:"#2A2A4A",text:"#E0E0FF",inputBg:"#1A1A35",name:"다크"},
+  light:{bg:"#F3F0FF",card:"#FFFFFF",card2:"#EDE9FE",purple:"#7C3AED",purpleL:"#A855F7",mint:"#059669",pink:"#DB2777",gold:"#D97706",white:"#1F1035",muted:"#6B7280",border:"#DDD6FE",text:"#3B0764",inputBg:"#EDE9FE",name:"라이트"}
+};
+const RCD={"SSS+":"#FF6B6B",SSS:"#FFD700","SS+":"#E879F9",SS:"#A78BFA","S+":"#60A5FA",S:"#34D399",AAA:"#FB923C",AA:"#FBBF24",A:"#FCD34D"};
+const RCL={"SSS+":"#DC2626",SSS:"#D97706","SS+":"#9333EA",SS:"#7C3AED","S+":"#2563EB",S:"#059669",AAA:"#EA580C",AA:"#CA8A04",A:"#A16207"};
+const DC={"쉬움":"#60A5FA","보통":"#A78BFA","조금 어려움":"#F472B6","어려움":"#FF6B6B"};
+
+function getTitle(r){
+  if(r>=17.50)return{name:"rainbow+",stars:3,color:"#FF6B6B"};
+  if(r>=17.25)return{name:"rainbow+",stars:2,color:"#FF6B6B"};
+  if(r>=17.00)return{name:"rainbow+",stars:1,color:"#FF6B6B"};
+  if(r>=16.75)return{name:"rainbow",stars:4,color:"#A855F7"};
+  if(r>=16.50)return{name:"rainbow",stars:3,color:"#A855F7"};
+  if(r>=16.25)return{name:"rainbow",stars:2,color:"#A855F7"};
+  if(r>=16.00)return{name:"rainbow",stars:1,color:"#A855F7"};
+  if(r>=15.75)return{name:"platinum",stars:3,color:"#E2E8F0"};
+  if(r>=15.50)return{name:"platinum",stars:2,color:"#E2E8F0"};
+  if(r>=15.25)return{name:"platinum",stars:1,color:"#E2E8F0"};
+  if(r>=14.50)return{name:"gold",stars:0,color:"#FFD700"};
+  if(r>=13.25)return{name:"silver",stars:0,color:"#C0C0C0"};
+  if(r>=12.00)return{name:"bronze",stars:0,color:"#CD7F32"};
+  if(r>=10.00)return{name:"purple",stars:0,color:"#A855F7"};
+  if(r>=7.00)return{name:"red",stars:0,color:"#EF4444"};
+  if(r>=4.00)return{name:"orange",stars:0,color:"#F97316"};
+  return{name:"green",stars:0,color:"#22C55E"};
+}
+function getRange(r){
+  const s=[17.50,17.25,17.00,16.75,16.50,16.25,16.00,15.75,15.50,15.25,14.50,13.25,12.00,10.00,7.00,4.00,0.00];
+  for(let i=0;i<s.length-1;i++)if(r>=s[i+1]&&r<s[i])return{from:s[i+1],to:s[i]};
+  if(r>=s[0])return{from:s[0],to:s[0]+0.25};
+  return{from:0,to:s[s.length-2]};
+}
+function calcR(score,c){
+  if(!score||score<900000)return 0;
+  if(score>=1009000)return c+2.15;
+  if(score>=1007500)return c+2.00+(score-1007500)/100*0.01;
+  if(score>=1005000)return c+1.50+(score-1005000)/50*0.01;
+  if(score>=1000000)return c+1.00+(score-1000000)/100*0.01;
+  if(score>=990000)return c+0.60+(score-990000)/250*0.01;
+  if(score>=975000)return c+(score-975000)/250*0.01;
+  if(score>=950000)return c-1.67+(score-950000)/150*0.01;
+  if(score>=925000)return c-3.34+(score-925000)/150*0.01;
+  return c-5.00+(score-900000)/150*0.01;
+}
+function getRank(s){
+  if(!s)return"-";
+  if(s>=1009000)return"SSS+";if(s>=1007500)return"SSS";
+  if(s>=1005000)return"SS+";if(s>=1000000)return"SS";
+  if(s>=990000)return"S+";if(s>=975000)return"S";
+  if(s>=950000)return"AAA";if(s>=925000)return"AA";
+  if(s>=900000)return"A";return"-";
+}
+function calcBest(songs){
+  const rs=songs.filter(s=>s.score>0).map(s=>calcR(s.score,s.c)).sort((a,b)=>b-a).slice(0,30);
+  return rs.length?rs.reduce((a,b)=>a+b,0)/rs.length:0;
+}
+function fmt(s){return s?s.toString().replace(/\B(?=(\d{3})+(?!\d))/g,","):"-";}
+function getDK(d=new Date()){const x=new Date(d);if(x.getHours()<5)x.setDate(x.getDate()-1);return x.toISOString().slice(0,10);}
+
+function getRec(songs,dk){
+  const top30=[...songs].filter(s=>s.score>0).map(s=>({...s,r:calcR(s.score,s.c)})).sort((a,b)=>b.r-a.r).slice(0,30);
+  const diffs=[{label:"쉬움",range:[16,30]},{label:"보통",range:[11,15]},{label:"조금 어려움",range:[6,10]},{label:"어려움",range:[1,5]}];
+  const tgts=[1000000,1001000,1002000,1003000,1004000,1005000,1005500,1006000,1006500,1007000,1007500,1007600,1007800,1008000,1008500,1009000,1009500,1010000];
+  const used=new Set();
+  const seed=dk.split("").reduce((a,c)=>a+c.charCodeAt(0),0);
+  return diffs.map((d,di)=>{
+    const sub=top30.slice(d.range[0]-1,d.range[1]);
+    if(!sub.length)return null;
+    const thr=sub.reduce((a,b)=>a+b.r,0)/sub.length;
+    const cands=songs.filter(s=>!used.has(s.id)).map(s=>{
+      for(const t of tgts.filter(t=>t>(s.score||0))){const nr=calcR(t,s.c);if(nr>=thr-0.02&&nr<=thr+0.08)return{...s,targetScore:t,targetRating:nr,gain:nr-calcR(s.score,s.c)};}
+      return null;
+    }).filter(Boolean).sort((a,b)=>Math.abs(a.targetRating-thr)-Math.abs(b.targetRating-thr));
+    const pick=cands[(seed+di*7)%Math.max(1,cands.length)]||cands[0]||null;
+    if(pick)used.add(pick.id);
+    return{label:d.label,color:DC[d.label],thr,song:pick};
+  }).filter(Boolean);
+}
+function sortedSongs(songs,rec){
+  const ids=new Set((rec||[]).map(r=>r?.song?.id).filter(Boolean));
+  return[...songs].sort((a,b)=>{
+    if(a.fav!==b.fav)return a.fav?-1:1;
+    if(ids.has(a.id)!==ids.has(b.id))return ids.has(a.id)?-1:1;
+    return a.c-b.c;
+  });
+}
+
+const LS={
+  get:(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch{return d;}},
+  set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
+};
+
+const SD=[
+  {t:"轆轤首",c:15.4,s:1004819},{t:"〚回帰〛 ～Scherzo~",c:15.2,s:1006594},{t:"luna blu [ULT]",c:15.2,s:0},
+  {t:"Everything Will Be One",c:15.4,s:1006900},{t:"DOMiNUS_GRAiL",c:15.4,s:1002197},{t:"Galaxy Collapse",c:15.3,s:1007116},
+  {t:"hyperreality",c:15.2,s:1008017},{t:"Kaleidoscope",c:15.2,s:1007781},{t:"OUTRAGE",c:15.4,s:1005358},
+  {t:"輪廻玲々",c:15.4,s:1007110},{t:"Theatore Creatore [ULT]",c:15.3,s:0},{t:"Crush the Dystopia",c:15.4,s:0},
+  {t:"HeinousЯeaper",c:15.3,s:1006354},{t:"I Wanna",c:15.2,s:1007259},{t:"The Devil Incarnate",c:15.3,s:0},
+  {t:"キミとボクへの葬送歌",c:15.3,s:1007606},{t:"Vampire [ULT]",c:15.2,s:0},{t:"Acid God",c:15.4,s:0},
+  {t:"MeteorSnow",c:15.2,s:1003935},{t:"LibrariA",c:15.3,s:0},{t:"Stardust:RAY",c:15.3,s:0},
+  {t:"What's up? Pop!",c:15.3,s:1007650},{t:"リ・フィクション・O",c:15.3,s:0},{t:"MarbleBlue.",c:15.2,s:1007292},
+  {t:"ΩΩPARTS",c:15.2,s:1007507},{t:"AiAe",c:15.2,s:1007592},{t:"ZegalltA",c:15.2,s:1005794},
+  {t:"βlαnoir",c:15.4,s:1007648},{t:"Invisible Frenzy",c:15.2,s:0},{t:"LAMIA",c:15.3,s:1005353},
+  {t:"sølips",c:15.3,s:0},{t:"Air",c:15.2,s:1001828},{t:"Aleph-0 [ULT]",c:15.4,s:0},
+  {t:"Disruptor Array",c:15.3,s:0},{t:"ENDYMION",c:15.4,s:1001867},{t:"Reverberate",c:15.2,s:0},
+  {t:"Scythe of Death",c:15.2,s:0},{t:"parvorbital",c:15.3,s:1004424},{t:"POTENTIAL",c:15.3,s:0},
+  {t:"Strange Love",c:15.3,s:1001433},{t:"蜘蛛の糸",c:15.2,s:1005115},{t:"雪男",c:15.2,s:0},
+  {t:"Love & Justice",c:15.2,s:1006392},{t:"X7124",c:15.3,s:0},{t:"ANU",c:15.3,s:1007923},
+  {t:"《破滅》～Rhapsody for The End",c:15.2,s:1003635},{t:"Trrricksters!!",c:15.3,s:0},
+  {t:"Killing Rhythm",c:15.3,s:0},{t:"Rebellion",c:15.4,s:0},{t:"otorii INNOVATED -[i]3-",c:15.2,s:1006208},
+  {t:"macrocosmos",c:15.4,s:0},{t:"Dengeki Tube",c:15.2,s:0},{t:"Finite",c:15.2,s:1005896},
+  {t:"TiamaT:F minor",c:15.3,s:0},{t:"神威",c:15.2,s:1004495},{t:"★LittlE HearTs★",c:15.2,s:1001604},
+  {t:"玩具狂奏曲 -終焉-",c:15.3,s:0},{t:"Contrapasso -inferno-",c:15.2,s:0},{t:"怒槌",c:15.4,s:0},
+  {t:"To : Be Continued",c:15.5,s:1005848},{t:"Λzure Vixen",c:15.5,s:1005727},{t:"Deep Blue",c:15.6,s:1006050},
+  {t:"A Site De La Rue",c:15.1,s:989458},{t:"Mutation",c:15.1,s:990983},{t:"ひつぎとふたご",c:15.1,s:994666},
+  {t:"Latent Kingdom",c:15.1,s:997166},{t:"GIGA DRIVE",c:15.1,s:1001816},{t:"End Time",c:15.1,s:1002158},
+  {t:"YURUSHITE",c:15.1,s:1003412},{t:"Rrhar'il",c:15.1,s:1003960},{t:"幻想即興曲",c:15.1,s:1004074},
+  {t:"アポカリプスに反逆の焔を焚べろ",c:15.1,s:1004659},{t:"チューリングの跡",c:15.1,s:1005223},
+  {t:"Viyella's Scream",c:15.1,s:1005287},{t:"Re：End of a Dream",c:15.1,s:1006782},
+  {t:"A c i - L",c:15.1,s:1007264},{t:"Odin",c:15.1,s:1007466},{t:"Elemental Creation [ULT]",c:15.1,s:1007546},
+  {t:"Giselle",c:15.1,s:1007525},{t:"躯樹の墓守",c:15.1,s:1007632},{t:"Viyella's Tears",c:15.1,s:1007758},
+  {t:"脳天直撃",c:15.1,s:1007754},{t:"黎命に殉ず",c:15.1,s:1007749},{t:"マシンガンポエムドール",c:15.1,s:1007738},
+  {t:"小悪魔の遊園地",c:15.1,s:1007882},{t:"Singularity",c:15.1,s:1008084},{t:"Halcyon [ULT]",c:15.1,s:1008153},
+  {t:"The Music of Violent Eating",c:15.1,s:1008121},{t:"其のエメラルドを見よ",c:15.1,s:1008410},
+  {t:"ラストピースに祝福と栄光を",c:15.5,s:994460},{t:"Aether Crest: Celestial",c:15.5,s:998343},
+  {t:"ピアノ協奏曲第１番\"蠍火\"",c:15.5,s:999213},{t:"宿星審判",c:15.5,s:1003860},
+  {t:"MegiddØ",c:15.5,s:0},{t:"Tuatha Dé Danann",c:15.5,s:0},{t:"World Vanquisher",c:15.5,s:0},
+  {t:"混沌を越えし我らが神聖なる調律主を讃えよ",c:15.5,s:0},
+  {t:"Ultimate Force",c:15.6,s:990230},{t:"Daphnis",c:15.6,s:995208},{t:"Verse X",c:15.6,s:1000735},
+  {t:"Sweet & Sour",c:15.6,s:0},{t:"Tru'nembra",c:15.6,s:0},{t:"神鳴",c:15.6,s:0},
+  {t:"Chaotic Ørder",c:15.6,s:0},  {t:"Makear",c:15.5,s:0},  
+  {t:"グラウンドスライダー協奏曲第一番「風唄」",c:15.6,s:0},
+  {t:"DA'AT -The First Seeker of Souls-",c:15.6,s:0},
+  {t:"MALKUTH -The Last Ruler of Terrestrials-",c:15.6,s:0},
+  {t:"業 -善なる神とこの世の悪について-",c:15.6,s:0},
+  {t:"The Metaverse -First story of the SeelischTact-",c:15.7,s:995462},
+  {t:"創 -汝ら新世界へ歩む者なり-",c:15.7,s:0},{t:"Crossmythos Rhapsodia",c:15.7,s:0},
+  {t:"Forsaken Tale",c:15.7,s:0},{t:"祈 -我ら神祖と共に歩む者なり-",c:15.7,s:0},
+  {t:"Devastating Blaster",c:15.0,s:0},{t:"Garakuta Doll Play",c:15.0,s:0},{t:"Angel dust",c:15.0,s:0},
+  {t:"エンドマークに希望と涙を添えて",c:15.0,s:0},{t:"宛城、炎上！！",c:15.0,s:0},
+  {t:"Aiolos",c:15.0,s:0},{t:"Iudicium",c:15.0,s:0},{t:"電光石火",c:15.0,s:0},
+  {t:"神威 (NAOKI × ZPP MIX)",c:15.0,s:0},{t:"Glorious Crown (tpz over-Over-OVERCUTE REMIX)",c:15.0,s:0},
+  {t:"neu",c:15.0,s:0},{t:"ジングルベル [ULT]",c:15.0,s:0},{t:"taboo tears you up [ULT]",c:15.0,s:0},
+  {t:"Megameteor",c:15.0,s:0},{t:"Blackmagik Blazing",c:15.0,s:0},{t:"Falsum Atlantis.",c:15.0,s:0},
+  {t:"Unwelcome School [ULT]",c:15.0,s:0},{t:"ニルヴの心臓",c:15.0,s:0},
+  {t:"宵の平安京 Stargazer",c:15.0,s:0},{t:"FREEDOM DiVE",c:15.0,s:0},
+  {t:"魔理沙は大変なものを盗んでいきました [ULT]",c:15.0,s:0},{t:"Cult future",c:15.0,s:0},
+  {t:"≠彡\"/了→",c:15.0,s:0},{t:"超最終鬼畜妹フランドール・S",c:15.0,s:0},
+  {t:"あの日、あの部屋で、あったこと",c:15.0,s:0},{t:"Blazing:Storm",c:15.0,s:0},
+  {t:"封焔の135秒",c:15.0,s:0},{t:"タイガーランペイジ [ULT]",c:15.0,s:0},
+  {t:"Oshama Scramble! [ULT]",c:15.0,s:0},{t:"淵底のグレイ・ユークロニア",c:15.0,s:0},
+  {t:"脳漿炸裂ガール [ULT]",c:15.0,s:0},{t:"Igallta",c:15.0,s:0},{t:"Opfer",c:15.0,s:0},
+  {t:"ビッグブリッヂの死闘 -シアトリズムFFAC Arrange- from FFV",c:15.0,s:0},
+  {t:"Black MInD",c:15.0,s:0},{t:"ホーリーサンバランド",c:15.0,s:0},{t:"Wizdomiot",c:15.0,s:0},
+  {t:"eden",c:15.0,s:0},{t:"QZKago Requiem",c:15.0,s:0},{t:"愛と煩悩と輪廻と常識の極彩世界",c:15.0,s:0},
+  {t:"TEmPTaTiON",c:15.0,s:0},{t:"渦状銀河のシンフォニエッタ",c:15.0,s:0},{t:"MARENOL",c:15.0,s:0},
+  {t:"Climax",c:15.0,s:0},{t:"L9 [ULT]",c:15.0,s:0},{t:"Synthesis.",c:15.0,s:0},
+  {t:"HERA",c:15.0,s:0},{t:"Ascension to Heaven",c:15.0,s:0},
+  {t:"最終鬼畜妹フランドール・S (Chroma Remix)",c:15.0,s:0},
+  {t:"BlythE [ULT]",c:15.1,s:0},{t:"ERIS -Legend of Gaidelia- [ULT]",c:15.1,s:0},
+  {t:"Big Bang",c:15.1,s:0},{t:"SON OF SUN [ULT]",c:15.1,s:0},{t:"Armageddon",c:15.1,s:0},
+  {t:"Schrecklicher Aufstand",c:15.1,s:0},{t:"A Man In The Mirror",c:15.1,s:0},
+  {t:"GIGA BLAST",c:15.1,s:0},{t:"患部で止まってすぐ溶ける～狂気の優曇華院 [ULT]",c:15.1,s:0},
+  {t:"Xevel",c:15.1,s:0},{t:"Gate of Fate [ULT]",c:15.1,s:0},
+  {t:"《創造》 ～ Cries, beyond The End",c:15.1,s:0},
+  {t:"並行天涯",c:15.1,s:0},{t:"Surveiller et punir",c:15.1,s:0},{t:"赤壁、大炎上！！",c:15.1,s:0},
+
+
+].map((s,i)=>({title:s.t,c:s.c,score:s.s,id:i+1,fav:false}));
+
+function UniIcon({size=32,imgSrc}){
+  if(imgSrc)return <img src={imgSrc} alt="Uni" width={size} height={size} style={{borderRadius:"50%",objectFit:"cover",objectPosition:"center top",display:"block",flexShrink:0,boxShadow:`0 0 ${size*0.35}px #A855F7aa`}}/>;
+  return(
+    <svg width={size} height={size} viewBox="0 0 120 120" style={{borderRadius:"50%",flexShrink:0,display:"block",boxShadow:`0 0 ${size*0.35}px #A855F7aa`}}>
+      <defs>
+        <radialGradient id="uBg"><stop offset="0%" stopColor="#2A1050"/><stop offset="100%" stopColor="#0D0820"/></radialGradient>
+        <radialGradient id="uFace" cx="50%" cy="38%" r="52%"><stop offset="0%" stopColor="#FFF4F8"/><stop offset="100%" stopColor="#F5D8EC"/></radialGradient>
+        <linearGradient id="uHair" x1="20%" y1="0%" x2="80%" y2="100%"><stop offset="0%" stopColor="#F8F6FF"/><stop offset="100%" stopColor="#C8C0F0"/></linearGradient>
+        <linearGradient id="uHorn" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stopColor="#22C55E"/><stop offset="100%" stopColor="#A3E635"/></linearGradient>
+        <radialGradient id="uEye" cx="35%" cy="30%" r="65%"><stop offset="0%" stopColor="#D8A0FF"/><stop offset="40%" stopColor="#A855F7"/><stop offset="100%" stopColor="#6B21D4"/></radialGradient>
+        <clipPath id="uClip"><circle cx="60" cy="60" r="60"/></clipPath>
+      </defs>
+      <circle cx="60" cy="60" r="60" fill="url(#uBg)"/>
+      <ellipse cx="60" cy="108" rx="38" ry="22" fill="#E8E0F8" clipPath="url(#uClip)"/>
+      <path d="M48,94 Q60,88 72,94 L68,102 Q60,98 52,102 Z" fill="#22C55E" clipPath="url(#uClip)" opacity="0.85"/>
+      <path d="M57,96 L60,104 L63,96 Q60,93 57,96Z" fill="#F472B6" clipPath="url(#uClip)"/>
+      <ellipse cx="60" cy="62" rx="34" ry="38" fill="url(#uHair)" clipPath="url(#uClip)"/>
+      <ellipse cx="28" cy="68" rx="10" ry="22" fill="url(#uHair)" transform="rotate(-8 28 68)" clipPath="url(#uClip)"/>
+      <ellipse cx="92" cy="68" rx="10" ry="22" fill="url(#uHair)" transform="rotate(8 92 68)" clipPath="url(#uClip)"/>
+      <path d="M42,36 Q36,14 44,8 Q48,18 46,32Z" fill="url(#uHorn)" clipPath="url(#uClip)"/>
+      <path d="M78,36 Q84,14 76,8 Q72,18 74,32Z" fill="url(#uHorn)" clipPath="url(#uClip)"/>
+      <ellipse cx="60" cy="60" rx="26" ry="29" fill="url(#uFace)"/>
+      <path d="M34,52 Q36,28 60,26 Q84,28 86,52 Q76,38 60,36 Q44,38 34,52Z" fill="url(#uHair)"/>
+      <path d="M37,42 Q41,39 45,41" stroke="#9B80CC" strokeWidth="1.8" fill="none" strokeLinecap="round"/>
+      <path d="M67,41 Q71,39 77,42" stroke="#9B80CC" strokeWidth="1.8" fill="none" strokeLinecap="round"/>
+      <ellipse cx="49" cy="59" rx="7" ry="7.5" fill="white"/><ellipse cx="71" cy="59" rx="7" ry="7.5" fill="white"/>
+      <ellipse cx="49" cy="59.5" rx="5.5" ry="6.5" fill="url(#uEye)"/><ellipse cx="71" cy="59.5" rx="5.5" ry="6.5" fill="url(#uEye)"/>
+      <circle cx="49" cy="60" r="3" fill="#1A0040"/><circle cx="71" cy="60" r="3" fill="#1A0040"/>
+      <circle cx="51" cy="57.5" r="1.8" fill="white" opacity="0.95"/><circle cx="73" cy="57.5" r="1.8" fill="white" opacity="0.95"/>
+      <path d="M52,75 Q60,81 68,75" stroke="#F472B6" strokeWidth="2" fill="none" strokeLinecap="round"/>
+      <ellipse cx="40" cy="68" rx="7" ry="4" fill="#FFB0C8" opacity="0.35"/>
+      <ellipse cx="80" cy="68" rx="7" ry="4" fill="#FFB0C8" opacity="0.35"/>
+      <circle cx="60" cy="60" r="59" fill="none" stroke="#A855F7" strokeWidth="1.5" opacity="0.7"/>
+    </svg>
+  );
+}
+
+const Cd=({children,style,C})=><div style={{background:C.card,borderRadius:16,padding:16,border:`1px solid ${C.border}`,...style}}>{children}</div>;
+const Bx=({rank,C,RC,size=13})=>{
+  if(!rank||rank==="-")return<span style={{color:C.muted,fontSize:size}}>-</span>;
+  return<span style={{color:RC[rank]||C.muted,fontWeight:900,fontSize:size}}>{rank}</span>;
+};
+
+function HomeTab({songs,C,RC,checklist,setChecklist,uniImg,recCache,setRecCache}){
+  const[offset,setOffset]=useState(0);
+  const[showAdd,setShowAdd]=useState(false);
+  const[selSong,setSelSong]=useState("");
+  const[goalScore,setGoalScore]=useState("");
+  const[note,setNote]=useState("");
+  const today=new Date();
+  const d=new Date(today);d.setDate(today.getDate()+offset);
+  const dk=getDK(d);
+  const ds=d.toLocaleDateString("ko-KR",{year:"numeric",month:"long",day:"numeric",weekday:"short"});
+  const dc=checklist[dk]||[];
+  const done=dc.filter(c=>c.checked).length;
+  const pct=dc.length?Math.round(done/dc.length*100):0;
+  const bestR=calcBest(songs);
+  const tRange=getRange(bestR);
+  const tk=getDK();
+  useEffect(()=>{
+    if(!recCache[tk]){const rec=getRec(songs,tk);const up={...recCache,[tk]:rec};setRecCache(up);LS.set("rc",up);}
+  },[]);
+  const rec=recCache[dk]||[];
+  const sorted=sortedSongs(songs,rec);
+  const addCheck=()=>{
+    if(!selSong&&!note)return;
+    const song=selSong?songs.find(s=>s.id===Number(selSong)):null;
+    const ni={id:Date.now(),songId:song?.id||null,goalScore:goalScore?Number(goalScore):null,checked:false,label:song?song.title:note};
+    const up={...checklist,[dk]:[...(checklist[dk]||[]),ni]};setChecklist(up);LS.set("cl",up);
+    setSelSong("");setGoalScore("");setNote("");setShowAdd(false);
+  };
+  const tog=id=>{const up={...checklist,[dk]:(checklist[dk]||[]).map(c=>c.id===id?{...c,checked:!c.checked}:c)};setChecklist(up);LS.set("cl",up);};
+  const rm=id=>{const up={...checklist,[dk]:(checklist[dk]||[]).filter(c=>c.id!==id)};setChecklist(up);LS.set("cl",up);};
+  return(
+    <div style={{padding:"0 16px 80px",display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <button onClick={()=>setOffset(o=>o-1)} style={{background:"none",border:`1px solid ${C.border}`,color:C.purple,borderRadius:8,padding:"4px 12px",fontSize:18,cursor:"pointer"}}>‹</button>
+        <div style={{textAlign:"center"}}>
+          <p style={{margin:0,fontSize:14,fontWeight:700,color:C.white}}>{ds}</p>
+          <p style={{margin:0,fontSize:11,color:C.purple}}>{offset===0?"오늘":offset>0?`${offset}일 후`:`${Math.abs(offset)}일 전`}</p>
+        </div>
+        <button onClick={()=>setOffset(o=>o+1)} style={{background:"none",border:`1px solid ${C.border}`,color:C.purple,borderRadius:8,padding:"4px 12px",fontSize:18,cursor:"pointer"}}>›</button>
+      </div>
+      <div style={{background:`linear-gradient(135deg,${C.purple},${C.purpleL})`,borderRadius:16,padding:16,color:"#fff"}}>
+        <p style={{margin:"0 0 2px",fontSize:12,opacity:0.85}}>Best Rating (Top 30)</p>
+        <div style={{display:"flex",alignItems:"flex-end",gap:10}}>
+          <span style={{fontSize:38,fontWeight:900,lineHeight:1}}>{bestR.toFixed(4)}</span>
+          <span style={{fontSize:12,opacity:0.8,marginBottom:4}}>→ {tRange.to.toFixed(2)}</span>
+        </div>
+        <div style={{marginTop:10,background:"rgba(255,255,255,0.3)",borderRadius:99,height:6}}>
+          <div style={{background:"#fff",borderRadius:99,height:6,width:`${Math.min(100,((bestR-tRange.from)/(tRange.to-tRange.from))*100)}%`}}/>
+        </div>
+      </div>
+      <Cd C={C} style={{display:"flex",alignItems:"center",gap:12}}>
+        <UniIcon size={44} imgSrc={uniImg}/>
+        <div><p style={{margin:"0 0 2px",fontSize:13,fontWeight:700,color:C.purple}}>Uni</p><p style={{margin:0,fontSize:12,color:C.muted}}>얏호~! 오늘도 CHUNITHM 하고 있어? 🎵</p></div>
+      </Cd>
+      <div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <div><p style={{margin:0,fontSize:14,fontWeight:700,color:C.white}}>체크리스트</p>{dc.length>0&&<p style={{margin:0,fontSize:11,color:C.muted}}>{done}/{dc.length} 완료 · {pct}%</p>}</div>
+          <button onClick={()=>setShowAdd(v=>!v)} style={{background:showAdd?C.card2:`linear-gradient(135deg,${C.purple},${C.purpleL})`,color:showAdd?C.muted:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>{showAdd?"취소":"+ 추가"}</button>
+        </div>
+        {dc.length>0&&<div style={{background:C.card2,borderRadius:8,height:6,marginBottom:10}}><div style={{background:`linear-gradient(to right,${C.purple},${C.purpleL})`,borderRadius:8,height:6,width:`${pct}%`,transition:"width .4s"}}/></div>}
+        {showAdd&&(
+          <Cd C={C} style={{marginBottom:10,background:C.card2}}>
+            <select value={selSong} onChange={e=>setSelSong(e.target.value)} style={{width:"100%",padding:"9px",borderRadius:10,border:`1px solid ${C.border}`,background:C.inputBg,color:C.white,fontSize:12,marginBottom:6,outline:"none",boxSizing:"border-box"}}>
+              <option value="">곡 선택 (없으면 직접 입력)</option>
+              {sorted.map(s=><option key={s.id} value={s.id}>{s.fav?"★ ":""}{s.title} ({s.c})</option>)}
+            </select>
+            {selSong&&<input type="number" placeholder="목표 점수" value={goalScore} onChange={e=>setGoalScore(e.target.value)} style={{width:"100%",padding:"9px",borderRadius:10,border:`1px solid ${C.border}`,background:C.inputBg,color:C.white,fontSize:12,marginBottom:6,outline:"none",boxSizing:"border-box"}}/>}
+            {!selSong&&<input placeholder="직접 입력" value={note} onChange={e=>setNote(e.target.value)} style={{width:"100%",padding:"9px",borderRadius:10,border:`1px solid ${C.border}`,background:C.inputBg,color:C.white,fontSize:12,marginBottom:6,outline:"none",boxSizing:"border-box"}}/>}
+            {selSong&&goalScore&&<p style={{margin:"0 0 6px",fontSize:11,color:C.purple}}>목표 레이팅: {calcR(Number(goalScore),songs.find(s=>s.id===Number(selSong))?.c||0).toFixed(4)}</p>}
+            <button onClick={addCheck} style={{width:"100%",background:`linear-gradient(135deg,${C.purple},${C.purpleL})`,color:"#fff",border:"none",borderRadius:10,padding:"10px",fontSize:13,fontWeight:700,cursor:"pointer"}}>추가</button>
+          </Cd>
+        )}
+        {dc.length===0&&!showAdd&&<p style={{textAlign:"center",padding:"16px 0",color:C.muted,fontSize:13}}>+ 버튼으로 체크리스트를 추가해보세요!</p>}
+        {dc.map(item=>{
+          const song=item.songId?songs.find(s=>s.id===item.songId):null;
+          const tR=song&&item.goalScore?calcR(item.goalScore,song.c):null;
+          return(
+            <div key={item.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px",borderRadius:12,marginBottom:6,background:item.checked?`${C.purple}18`:C.card2,border:`1px solid ${item.checked?C.purple+"55":C.border}`}}>
+              <div onClick={()=>tog(item.id)} style={{width:22,height:22,borderRadius:6,border:`2px solid ${item.checked?C.purple:C.border}`,background:item.checked?C.purple:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer"}}>
+                {item.checked&&<span style={{color:"#fff",fontSize:13}}>✓</span>}
+              </div>
+              <div style={{flex:1}}>
+                <p style={{margin:0,fontSize:13,fontWeight:600,color:item.checked?C.muted:C.white,textDecoration:item.checked?"line-through":"none"}}>{item.label}</p>
+                {tR&&<p style={{margin:0,fontSize:11,color:C.muted}}>목표: {fmt(item.goalScore)} → {tR.toFixed(4)}</p>}
+              </div>
+              <button onClick={()=>rm(item.id)} style={{background:"none",border:"none",color:"#EF4444",fontSize:16,cursor:"pointer",padding:0}}>×</button>
+            </div>
+          );
+        })}
+      </div>
+      <div>
+        <p style={{margin:"0 0 10px",fontSize:14,fontWeight:700,color:C.white}}>⭐ {offset===0?"오늘의":"해당 날짜"} 추천</p>
+        {rec.length===0&&<p style={{color:C.muted,fontSize:13,textAlign:"center",padding:"10px 0"}}>추천 데이터가 없어요.</p>}
+        {rec.map(d=>d.song&&(
+          <div key={d.label} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:12,marginBottom:8,background:C.card2,border:`1px solid ${d.color}55`,borderLeft:`4px solid ${d.color}`}}>
+            <div style={{width:10,height:10,borderRadius:"50%",background:d.color,flexShrink:0}}/>
+            <div style={{flex:1,minWidth:0}}>
+              <span style={{fontSize:11,fontWeight:700,color:d.color}}>{d.label} </span>
+              <p style={{margin:0,fontSize:13,fontWeight:600,color:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.song.title}</p>
+              <p style={{margin:0,fontSize:11,color:C.muted}}>상수 {d.song.c} · {fmt(d.song.score)} → {fmt(d.song.targetScore)}</p>
+            </div>
+            <div style={{textAlign:"right",flexShrink:0}}>
+              <p style={{margin:0,fontSize:13,fontWeight:700,color:d.color}}>{d.song.targetRating.toFixed(4)}</p>
+              <p style={{margin:0,fontSize:10,color:C.mint}}>+{d.song.gain.toFixed(4)}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SongListTab({songs,setSongs,C,RC}){
+  const[filter,setFilter]=useState("전체");
+  const[sortKey,setSortKey]=useState("상수");
+  const[sortAsc,setSortAsc]=useState(true);
+  const[search,setSearch]=useState("");
+  const tog=id=>{const ns=songs.map(s=>s.id===id?{...s,fav:!s.fav}:s);setSongs(ns);LS.set("songs",ns);};
+  const handleSort=k=>{if(sortKey===k)setSortAsc(v=>!v);else{setSortKey(k);setSortAsc(k==="상수");}};
+  let list=[...songs];
+  if(search)list=list.filter(s=>s.title.toLowerCase().includes(search.toLowerCase()));
+  if(filter==="즐겨찾기")list=list.filter(s=>s.fav);
+  else if(filter==="미플레이")list=list.filter(s=>!s.score);
+  else if(filter!=="전체")list=list.filter(s=>getRank(s.score)===filter);
+  list.sort((a,b)=>{
+    let v=sortKey==="레이팅"?calcR(a.score,a.c)-calcR(b.score,b.c):sortKey==="점수"?a.score-b.score:a.c-b.c;
+    return sortAsc?v:-v;
+  });
+  return(
+    <div style={{padding:"0 16px 80px"}}>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="곡 검색..." style={{width:"100%",padding:"10px 14px",borderRadius:12,border:`1.5px solid ${C.border}`,background:C.inputBg,color:C.white,fontSize:13,outline:"none",marginBottom:10,boxSizing:"border-box"}}/>
+      <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:8,paddingBottom:4}}>
+        {["전체","즐겨찾기","미플레이","SS","SS+","SSS","SSS+"].map(f=>(
+          <button key={f} onClick={()=>setFilter(f)} style={{flexShrink:0,background:filter===f?`linear-gradient(135deg,${C.purple},${C.purpleL})`:C.card2,color:filter===f?"#fff":C.muted,border:`1px solid ${filter===f?C.purple:C.border}`,borderRadius:99,padding:"5px 12px",fontSize:12,fontWeight:700,cursor:"pointer"}}>{f}</button>
+        ))}
+      </div>
+      <div style={{display:"flex",gap:6,marginBottom:10}}>
+        {["상수","레이팅","점수"].map(k=>(
+          <button key={k} onClick={()=>handleSort(k)} style={{flex:1,background:sortKey===k?C.card2:"transparent",color:sortKey===k?C.purple:C.muted,border:`1px solid ${sortKey===k?C.border:"transparent"}`,borderRadius:8,padding:"5px",fontSize:11,cursor:"pointer"}}>
+            {k}{sortKey===k?(sortAsc?"↑":"↓"):""}
+          </button>
+        ))}
+      </div>
+      <p style={{margin:"0 0 8px",fontSize:12,color:C.muted}}>{list.length}곡</p>
+      {list.map(s=>{
+        const r=calcR(s.score,s.c);const rank=getRank(s.score);
+        return(
+          <div key={s.id} style={{display:"flex",alignItems:"center",gap:8,padding:"10px",borderRadius:10,marginBottom:5,background:C.card2,border:`1px solid ${C.border}`}}>
+            <button onClick={()=>tog(s.id)} style={{background:"none",border:"none",fontSize:16,cursor:"pointer",padding:0,flexShrink:0,color:s.fav?C.gold:C.muted}}>★</button>
+            <div style={{flex:1,minWidth:0}}>
+              <p style={{margin:"0 0 2px",fontSize:13,fontWeight:600,color:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.title}</p>
+              <p style={{margin:0,fontSize:11,color:C.muted}}>상수 {s.c} · {s.score?fmt(s.score):"미플레이"}</p>
+            </div>
+            <div style={{textAlign:"right",flexShrink:0}}>
+              <Bx rank={rank} size={12} C={C} RC={RC}/>
+              {r>0&&<p style={{margin:"2px 0 0",fontSize:11,color:C.purple,fontWeight:700}}>{r.toFixed(4)}</p>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function AITab({songs,onAddPlan,C,uniImg,recCache}){
+  const[msgs,setMsgs]=useState([{role:"assistant",text:"얏호~! 플레이어씨!\n오늘도 CHUNITHM, 하고 있어? 🎵\n지금이라면 어떤 곡이든 공략해버릴 수 있어~!",id:0}]);
+  const[input,setInput]=useState("");
+  const[loading,setLoading]=useState(false);
+  const[savedIds,setSavedIds]=useState(new Set());
+  const[recOpen,setRecOpen]=useState(false);
+  const endRef=useRef(null);
+  useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[msgs]);
+  const send=()=>{
+    const q=input.trim();if(!q)return;
+    setMsgs(m=>[...m,{role:"user",text:q}]);setInput("");setLoading(true);
+    const bestR=calcBest(songs);
+    const rec=recCache[getDK()]||[];
+    const tRange=getRange(bestR);
+    const title=getTitle(bestR);
+    setTimeout(()=>{
+      let text="";
+      const planItems=[];
+      const ql=q.toLowerCase();
+      if(ql.includes("계획")||ql.includes("연습")||ql.includes("오늘")){
+        const targets=rec.filter(d=>d.song).slice(0,4);
+        text="얏호~! 플레이어씨, 오늘 연습 계획 같이 짜보자~! 🎵\n\n";
+        targets.forEach((d,i)=>{
+          text+=`${i+1}. [${d.label}] ${d.song.title} (상수 ${d.song.c})\n   현재 ${fmt(d.song.score)} → 목표 ${fmt(d.song.targetScore)} (레이팅 ${d.song.targetRating.toFixed(4)})\n`;
+          planItems.push(`[${d.label}] ${d.song.title} → ${fmt(d.song.targetScore)} 목표`);
+        });
+        text+="\n지금이라면 할 수 있어~! 화이팅!! 💪";
+      } else if(ql.includes("추천")||ql.includes("곡")){
+        text="후후, 기분이 좋네~! 지금 플레이어씨한테 딱 맞는 곡 알려줄게! 🎶\n\n";
+        rec.filter(d=>d.song).forEach((d,i)=>{
+          text+=`${i+1}. ${d.song.title} (상수 ${d.song.c})\n   ${fmt(d.song.score)} → ${fmt(d.song.targetScore)} 로 올리면 레이팅 ${d.song.targetRating.toFixed(4)}!\n`;
+        });
+        text+="\n준비됐어? 지금 바로 도전해보자~!! ⭐";
+      } else if(ql.includes("레이팅")||ql.includes("올리")||ql.includes("상승")){
+        text=`플레이어씨 현재 Best Rating은 ${bestR.toFixed(4)}이야! 🏆\n\n`;
+        text+=`현재 칭호: ${title.name} ${"★".repeat(title.stars)}\n`;
+        text+=`다음 목표: ${tRange.to.toFixed(2)} 달성!\n\n`;
+        text+="레이팅을 올리려면 Best 30 안에 더 높은 레이팅 곡을 넣어야 해~!\n";
+        text+="특히 지금 Best 30 하위권 곡들을 갱신하는 게 제일 효과적이야! 지금이라면 할 수 있어~!! 💫";
+      } else if(ql.includes("쉬운")||ql.includes("쉬움")){
+        const easy=rec.find(d=>d.label==="쉬움");
+        if(easy&&easy.song){
+          text=`얏호~! 쉬운 목표부터 차근차근 가보자~! 🌟\n\n`;
+          text+=`추천: ${easy.song.title} (상수 ${easy.song.c})\n`;
+          text+=`현재 ${fmt(easy.song.score)} → 목표 ${fmt(easy.song.targetScore)}\n`;
+          text+=`달성하면 레이팅 ${easy.song.targetRating.toFixed(4)}!\n\n`;
+          text+="이 정도면 충분히 할 수 있어~! 파이팅!! 🎵";
+          planItems.push(`[쉬움] ${easy.song.title} → ${fmt(easy.song.targetScore)} 목표`);
+        } else {
+          text="얏호~! 쉬운 목표를 찾고 있구나~!\n지금 추천 곡 탭을 확인해봐! 오늘의 추천에 딱 맞는 곡들이 있어~! 🎶";
+        }
+      } else if(ql.includes("어려운")||ql.includes("어려움")||ql.includes("도전")){
+        const hard=rec.find(d=>d.label==="어려움");
+        if(hard&&hard.song){
+          text=`오오~! 도전 정신이 넘치는 플레이어씨~!! 멋져!! 🔥\n\n`;
+          text+=`추천: ${hard.song.title} (상수 ${hard.song.c})\n`;
+          text+=`현재 ${fmt(hard.song.score)} → 목표 ${fmt(hard.song.targetScore)}\n`;
+          text+=`달성하면 레이팅 ${hard.song.targetRating.toFixed(4)}!\n\n`;
+          text+="SSS는 결과, 과정은 네가 만드는 리듬이야~! 할 수 있어!! 💪";
+          planItems.push(`[어려움] ${hard.song.title} → ${fmt(hard.song.targetScore)} 목표`);
+        } else {
+          text="오오~! 도전 정신이 넘치는구나~!! 🔥\n오늘의 추천에서 '어려움' 곡을 확인해봐! 최고의 도전이 기다리고 있어~!";
+        }
+      } else if(ql.includes("안녕")||ql.includes("hi")||ql.includes("hello")||ql.includes("반가")){
+        text=`얏호~! 플레이어씨~!! 오늘도 만나서 반가워!! 🎵\n\n현재 Best Rating: ${bestR.toFixed(4)}\n칭호: ${title.name} ${"★".repeat(title.stars)}\n다음 목표: ${tRange.to.toFixed(2)}\n\n지금이라면 어떤 곡이든 공략해버릴 수 있어~!! 오늘도 화이팅!! 💪`;
+      } else {
+        text=`응응~! 플레이어씨!! 🎵\n\n현재 Best Rating: ${bestR.toFixed(4)} (${title.name} ${"★".repeat(title.stars)})\n다음 목표: ${tRange.to.toFixed(2)}\n\n이런 것들을 물어봐줘~!\n• "오늘 연습 계획 짜줘"\n• "추천 곡 알려줘"\n• "레이팅 올리는 법"\n• "쉬운 목표 알려줘"\n• "어려운 도전 알려줘"\n\n준비됐어? 지금 바로 시작하자~!! ⭐`;
+      }
+      const mid=Date.now();
+      setMsgs(m=>[...m,{role:"assistant",text,id:mid,planItems:planItems.length>0?planItems:null}]);
+      setLoading(false);
+    },600);
+  };
+  const save=msg=>{if(!msg.planItems?.length)return;onAddPlan(msg.planItems);setSavedIds(s=>new Set([...s,msg.id]));};
+  const todayRec=recCache[getDK()]||[];
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
+      <div style={{margin:"0 16px 10px",background:`linear-gradient(135deg,${C.purple}22,${C.purpleL}11)`,borderRadius:16,padding:14,display:"flex",gap:12,alignItems:"center",border:`1px solid ${C.purple}55`}}>
+        <UniIcon size={52} imgSrc={uniImg}/>
+        <div><p style={{margin:"0 0 2px",fontSize:16,fontWeight:800,color:C.purple}}>Uni</p><p style={{margin:0,fontSize:12,color:C.muted}}>너라면 할 수 있어~! 준비됐어? 🎵</p></div>
+      </div>
+      <div style={{margin:"0 16px 8px",border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden"}}>
+        <button onClick={()=>setRecOpen(v=>!v)} style={{width:"100%",background:C.card2,border:"none",padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",color:C.white,fontSize:13,fontWeight:700}}>
+          <span>🎯 오늘의 난이도별 추천</span><span style={{color:C.muted}}>{recOpen?"▲":"▼"}</span>
+        </button>
+        {recOpen&&(
+          <div style={{padding:"8px 14px 12px",background:C.card}}>
+            {todayRec.map(d=>d.song&&(
+              <div key={d.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,padding:"6px 8px",borderRadius:8,background:`${d.color}18`,borderLeft:`3px solid ${d.color}`}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <span style={{fontSize:11,fontWeight:700,color:d.color}}>{d.label} · </span>
+                  <span style={{fontSize:12,color:C.white}}>{d.song.title}</span>
+                  <p style={{margin:0,fontSize:10,color:C.muted}}>{fmt(d.song.score)} → {fmt(d.song.targetScore)}</p>
+                </div>
+                <p style={{margin:0,fontSize:12,color:d.color,fontWeight:700,flexShrink:0}}>{d.song.targetRating.toFixed(4)}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"0 16px 8px"}}>
+        {msgs.map((m,i)=>(
+          <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start",marginBottom:10}}>
+            {m.role==="assistant"&&<div style={{marginRight:8,alignSelf:"flex-end"}}><UniIcon size={32} imgSrc={uniImg}/></div>}
+            <div style={{maxWidth:"78%",display:"flex",flexDirection:"column",gap:6,alignItems:m.role==="user"?"flex-end":"flex-start"}}>
+              <div style={{background:m.role==="user"?`linear-gradient(135deg,${C.purple},${C.purpleL})`:C.card2,color:m.role==="user"?"#fff":C.white,borderRadius:m.role==="user"?"18px 18px 4px 18px":"18px 18px 18px 4px",padding:"10px 14px",fontSize:13,lineHeight:1.6,border:m.role==="assistant"?`1px solid ${C.border}`:"none",whiteSpace:"pre-wrap"}}>{m.text}</div>
+              {m.role==="assistant"&&m.planItems?.length>0&&(
+                <button onClick={()=>save(m)} disabled={savedIds.has(m.id)} style={{background:savedIds.has(m.id)?C.card2:`linear-gradient(135deg,#059669,${C.mint})`,color:savedIds.has(m.id)?C.muted:"#fff",border:"none",borderRadius:99,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:savedIds.has(m.id)?"default":"pointer"}}>
+                  {savedIds.has(m.id)?"✓ 저장됨":"📋 계획 기록하기"}
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+        {loading&&<div style={{display:"flex",gap:8,alignItems:"flex-end",marginBottom:10}}><UniIcon size={32} imgSrc={uniImg}/><div style={{background:C.card2,borderRadius:"18px 18px 18px 4px",padding:"10px 16px",border:`1px solid ${C.border}`}}><span style={{color:C.purple,fontSize:20,letterSpacing:4}}>···</span></div></div>}
+        <div ref={endRef}/>
+      </div>
+      <div style={{padding:"0 16px 8px",display:"flex",gap:6,overflowX:"auto"}}>
+        {["오늘 연습 계획 짜줘","레이팅 올리는 법","쉬운 목표 알려줘"].map(q=>(
+          <button key={q} onClick={()=>setInput(q)} style={{flexShrink:0,background:`${C.purple}22`,color:C.purple,border:`1px solid ${C.purple}55`,borderRadius:99,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>{q}</button>
+        ))}
+      </div>
+      <div style={{padding:"8px 16px 16px",display:"flex",gap:8}}>
+        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder="Uni와 대화하기..." style={{flex:1,padding:"12px 16px",borderRadius:24,border:`1.5px solid ${C.border}`,background:C.inputBg,color:C.white,fontSize:14,outline:"none"}}/>
+        <button onClick={send} disabled={loading||!input.trim()} style={{width:44,height:44,borderRadius:"50%",background:input.trim()?`linear-gradient(135deg,${C.purple},${C.purpleL})`:C.card2,border:"none",color:"#fff",fontSize:18,cursor:"pointer"}}>➤</button>
+      </div>
+    </div>
+  );
+}
+
+function StatsTab({songs,C,RC,recCache}){
+  const played=songs.filter(s=>s.score>0);
+  const bestR=calcBest(songs);
+  const top30=[...played].sort((a,b)=>calcR(b.score,b.c)-calcR(a.score,a.c)).slice(0,30);
+  const rankDist=["SSS+","SSS","SS+","SS","S+","S"].map(r=>({rank:r,count:songs.filter(s=>getRank(s.score)===r).length,color:RC[r]}));
+  const rec=recCache[getDK()]||[];
+  return(
+    <div style={{padding:"0 16px 80px",display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        {[{label:"Best Rating",value:bestR.toFixed(4),icon:"⭐",color:C.purple},{label:"플레이한 곡",value:`${played.length}곡`,icon:"🎵",color:C.mint},{label:"SSS 이상",value:`${songs.filter(s=>["SSS","SSS+"].includes(getRank(s.score))).length}곡`,icon:"🏆",color:C.gold},{label:"즐겨찾기",value:`${songs.filter(s=>s.fav).length}곡`,icon:"★",color:C.pink}].map(c=>(
+          <Cd key={c.label} C={C}><p style={{margin:"0 0 4px",fontSize:20}}>{c.icon}</p><p style={{margin:"0 0 2px",fontSize:18,fontWeight:800,color:c.color}}>{c.value}</p><p style={{margin:0,fontSize:11,color:C.muted}}>{c.label}</p></Cd>
+        ))}
+      </div>
+      <Cd C={C}><p style={{margin:"0 0 12px",fontSize:13,fontWeight:700,color:C.white}}>랭크 분포</p>
+        {rankDist.map(r=>(
+          <div key={r.rank} style={{marginBottom:8}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><Bx rank={r.rank} size={12} C={C} RC={RC}/><span style={{fontSize:12,color:C.muted}}>{r.count}곡</span></div>
+            <div style={{background:C.border,borderRadius:99,height:6}}><div style={{background:RC[r.rank],borderRadius:99,height:6,width:`${(r.count/Math.max(songs.length,1))*100}%`}}/></div>
+          </div>
+        ))}
+      </Cd>
+      <Cd C={C}><p style={{margin:"0 0 10px",fontSize:13,fontWeight:700,color:C.white}}>📈 오늘의 난이도별 추천</p>
+        {rec.map(d=>d.song&&(
+          <div key={d.label} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:10,marginBottom:6,background:`${d.color}18`,border:`1px solid ${d.color}44`}}>
+            <div style={{width:10,height:10,borderRadius:"50%",background:d.color,flexShrink:0}}/>
+            <div style={{flex:1,minWidth:0}}><span style={{fontSize:11,fontWeight:700,color:d.color}}>{d.label} · </span><span style={{fontSize:12,color:C.white}}>{d.song.title}</span><p style={{margin:0,fontSize:10,color:C.muted}}>상수 {d.song.c} · {fmt(d.song.score)} → {fmt(d.song.targetScore)}</p></div>
+            <div style={{textAlign:"right"}}><p style={{margin:0,fontSize:12,fontWeight:700,color:d.color}}>{d.song.targetRating.toFixed(4)}</p><p style={{margin:0,fontSize:10,color:C.mint}}>+{d.song.gain.toFixed(4)}</p></div>
+          </div>
+        ))}
+      </Cd>
+      <Cd C={C}><p style={{margin:"0 0 10px",fontSize:13,fontWeight:700,color:C.white}}>🏅 Best 30</p>
+        {top30.map((s,i)=>(
+          <div key={s.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
+            <span style={{fontSize:11,color:i<3?C.gold:C.muted,width:20,fontWeight:700}}>{i+1}</span>
+            <div style={{flex:1,minWidth:0}}><p style={{margin:0,fontSize:12,color:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.title}</p><p style={{margin:0,fontSize:10,color:C.muted}}>상수{s.c} · {fmt(s.score)}</p></div>
+            <div style={{textAlign:"right"}}><Bx rank={getRank(s.score)} size={11} C={C} RC={RC}/><p style={{margin:0,fontSize:11,color:C.purple,fontWeight:700}}>{calcR(s.score,s.c).toFixed(4)}</p></div>
+          </div>
+        ))}
+      </Cd>
+    </div>
+  );
+}
+
+function MyTab({songs,setSongs,C,RC,uniImg,setUniImg,theme,setTheme,nickname,setNickname,recCache}){
+  const[sub,setSub]=useState("main");
+  const[editSong,setEditSong]=useState(null);
+  const[newScore,setNewScore]=useState("");
+  const[search,setSearch]=useState("");
+  const[editNick,setEditNick]=useState(false);
+  const[nickInput,setNickInput]=useState(nickname);
+  const fileRef=useRef(null);
+  const bestR=calcBest(songs);
+  const title=getTitle(bestR);
+  const tRange=getRange(bestR);
+  const topSongs=[...songs].filter(s=>s.score>0).sort((a,b)=>calcR(b.score,b.c)-calcR(a.score,a.c)).slice(0,5);
+  const favSongs=songs.filter(s=>s.fav);
+  const rec=recCache[getDK()]||[];
+  const sorted=sortedSongs(songs,rec);
+  const handleImg=e=>{const file=e.target.files?.[0];if(!file)return;const r=new FileReader();r.onload=ev=>{setUniImg(ev.target?.result);LS.set("uniImg",ev.target?.result);};r.readAsDataURL(file);};
+  const saveScore=()=>{const sc=Number(newScore);if(!sc||sc<0||sc>1010000)return;const ns=songs.map(x=>x.id===editSong.id?{...x,score:sc}:x);setSongs(ns);LS.set("songs",ns);setEditSong(null);setNewScore("");};
+  const saveNick=()=>{const n=nickInput.trim();if(n){setNickname(n);LS.set("nick",n);}setEditNick(false);};
+
+  if(sub==="fav")return(
+    <div style={{padding:"0 16px 80px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+        <button onClick={()=>setSub("main")} style={{background:"none",border:"none",color:C.purple,fontSize:20,cursor:"pointer"}}>‹</button>
+        <p style={{margin:0,fontSize:16,fontWeight:700,color:C.white}}>★ 즐겨찾기 ({favSongs.length})</p>
+      </div>
+      {favSongs.length===0?<p style={{textAlign:"center",padding:"40px 0",color:C.muted,fontSize:13}}>곡 목록에서 ★을 눌러 즐겨찾기!</p>
+        :favSongs.map(s=>{const r=calcR(s.score,s.c);return(
+          <div key={s.id} style={{display:"flex",alignItems:"center",gap:8,padding:"10px",borderRadius:10,marginBottom:5,background:C.card2,border:`1px solid ${C.border}`}}>
+            <button onClick={()=>{const ns=songs.map(x=>x.id===s.id?{...x,fav:false}:x);setSongs(ns);LS.set("songs",ns);}} style={{background:"none",border:"none",color:C.gold,fontSize:16,cursor:"pointer",padding:0}}>★</button>
+            <div style={{flex:1,minWidth:0}}><p style={{margin:"0 0 2px",fontSize:13,fontWeight:600,color:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.title}</p><p style={{margin:0,fontSize:11,color:C.muted}}>상수 {s.c} · {fmt(s.score)}</p></div>
+            <div style={{textAlign:"right"}}><Bx rank={getRank(s.score)} size={12} C={C} RC={RC}/>{r>0&&<p style={{margin:"2px 0 0",fontSize:11,color:C.purple}}>{r.toFixed(4)}</p>}</div>
+          </div>
+        );})}
+    </div>
+  );
+
+  if(sub==="update")return(
+    <div style={{padding:"0 16px 80px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+        <button onClick={()=>{setSub("main");setEditSong(null);setNewScore("");}} style={{background:"none",border:"none",color:C.purple,fontSize:20,cursor:"pointer"}}>‹</button>
+        <p style={{margin:0,fontSize:16,fontWeight:700,color:C.white}}>📝 점수 갱신</p>
+      </div>
+      {editSong?(
+        <Cd C={C}>
+          <p style={{margin:"0 0 4px",fontSize:14,fontWeight:700,color:C.white}}>{editSong.title}</p>
+          <p style={{margin:"0 0 12px",fontSize:12,color:C.muted}}>상수 {editSong.c} · 현재: {fmt(editSong.score)}</p>
+          <input type="number" placeholder="새 점수 입력" value={newScore} onChange={e=>setNewScore(e.target.value)} style={{width:"100%",padding:"10px 14px",borderRadius:10,border:`1.5px solid ${C.border}`,background:C.inputBg,color:C.white,fontSize:14,outline:"none",marginBottom:8,boxSizing:"border-box"}}/>
+          {newScore&&Number(newScore)>=900000&&(
+            <div style={{background:`${C.purple}18`,borderRadius:10,padding:"10px 12px",marginBottom:10}}>
+              <p style={{margin:"0 0 2px",fontSize:12,color:C.muted}}>새 랭크: <Bx rank={getRank(Number(newScore))} size={13} C={C} RC={RC}/></p>
+              <p style={{margin:0,fontSize:13,fontWeight:700,color:C.purple}}>새 레이팅: {calcR(Number(newScore),editSong.c).toFixed(4)}</p>
+            </div>
+          )}
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>{setEditSong(null);setNewScore("");}} style={{flex:1,background:C.card2,color:C.muted,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px",fontSize:13,cursor:"pointer"}}>취소</button>
+            <button onClick={saveScore} style={{flex:2,background:`linear-gradient(135deg,${C.purple},${C.purpleL})`,color:"#fff",border:"none",borderRadius:10,padding:"10px",fontSize:13,fontWeight:700,cursor:"pointer"}}>저장</button>
+          </div>
+        </Cd>
+      ):(
+        <div>
+          <input placeholder="곡 검색..." value={search} onChange={e=>setSearch(e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:10,border:`1px solid ${C.border}`,background:C.inputBg,color:C.white,fontSize:12,outline:"none",marginBottom:8,boxSizing:"border-box"}}/>
+          {sorted.filter(s=>!search||s.title.toLowerCase().includes(search.toLowerCase())).map(s=>(
+            <div key={s.id} onClick={()=>{setEditSong(s);setNewScore(s.score||"");}} style={{display:"flex",alignItems:"center",gap:8,padding:"10px",borderRadius:10,marginBottom:5,background:C.card2,border:`1px solid ${C.border}`,cursor:"pointer"}}>
+              {s.fav&&<span style={{color:C.gold,fontSize:13}}>★</span>}
+              <div style={{flex:1,minWidth:0}}><p style={{margin:"0 0 2px",fontSize:13,color:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.title}</p><p style={{margin:0,fontSize:11,color:C.muted}}>상수 {s.c} · {s.score?fmt(s.score):"미플레이"}</p></div>
+              <span style={{color:C.purple,fontSize:14}}>›</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  return(
+    <div style={{padding:"0 16px 80px"}}>
+      <div style={{background:`linear-gradient(135deg,${C.purple}22,${C.purpleL}11)`,borderRadius:20,padding:20,marginBottom:14,border:`1px solid ${C.purple}33`}}>
+        <div style={{display:"flex",gap:14,alignItems:"center",marginBottom:14}}>
+          <div style={{position:"relative"}}>
+            <UniIcon size={60} imgSrc={uniImg}/>
+            <button onClick={()=>fileRef.current?.click()} style={{position:"absolute",bottom:-2,right:-2,width:22,height:22,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},${C.purpleL})`,border:"2px solid "+C.bg,color:"#fff",fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✏️</button>
+            <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={handleImg}/>
+          </div>
+          <div style={{flex:1}}>
+            <p style={{margin:"0 0 2px",fontSize:10,fontWeight:700,letterSpacing:2,color:title.color}}>{title.name}{"★".repeat(title.stars)}</p>
+            {editNick?(
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <input value={nickInput} onChange={e=>setNickInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&saveNick()} style={{flex:1,background:"transparent",border:`1px solid ${C.purple}`,borderRadius:6,color:C.white,fontSize:16,fontWeight:800,padding:"2px 6px",outline:"none"}}/>
+                <button onClick={saveNick} style={{background:C.purple,border:"none",borderRadius:6,color:"#fff",fontSize:11,padding:"3px 8px",cursor:"pointer"}}>저장</button>
+              </div>
+            ):(
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <p style={{margin:0,fontSize:18,fontWeight:800,color:C.white}}>{nickname}</p>
+                <button onClick={()=>{setEditNick(true);setNickInput(nickname);}} style={{background:"none",border:"none",color:C.muted,fontSize:13,cursor:"pointer",padding:0}}>✏️</button>
+              </div>
+            )}
+            <p style={{margin:0,fontSize:12,color:C.muted}}>Best Rating {bestR.toFixed(4)}</p>
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:11,color:C.muted}}>{tRange.from.toFixed(2)}</span>
+          <div style={{flex:1,background:C.border,borderRadius:99,height:8}}><div style={{background:`linear-gradient(to right,${C.purple},${C.purpleL})`,borderRadius:99,height:8,width:`${Math.min(100,((bestR-tRange.from)/(tRange.to-tRange.from))*100)}%`}}/></div>
+          <span style={{fontSize:11,color:C.muted}}>{tRange.to.toFixed(2)}</span>
+        </div>
+      </div>
+      {[{icon:"★",label:"즐겨찾는 곡",badge:`${favSongs.length}곡`,action:()=>setSub("fav")},{icon:"📝",label:"점수 갱신",action:()=>setSub("update")},{icon:"🎨",label:"테마 변경",badge:C.name,action:()=>{const nt=theme==="dark"?"light":"dark";setTheme(nt);LS.set("theme",nt);}},{icon:"🖼️",label:"코치 아이콘 변경",action:()=>fileRef.current?.click()},].map((item,i)=>(
+        <div key={i} onClick={item.action} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 0",borderBottom:`1px solid ${C.border}`,cursor:"pointer"}}>
+          <span style={{fontSize:18}}>{item.icon}</span>
+          <p style={{margin:0,fontSize:14,color:C.white,flex:1}}>{item.label}</p>
+          {item.badge&&<span style={{fontSize:11,color:C.purple,fontWeight:700}}>{item.badge}</span>}
+          <span style={{color:C.muted,fontSize:16}}>›</span>
+        </div>
+      ))}
+      <p style={{margin:"14px 0 8px",fontSize:13,fontWeight:700,color:C.white}}>🏅 레이팅 Top 5</p>
+      {topSongs.map((s,i)=>(
+        <div key={s.id} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 10px",borderRadius:10,marginBottom:5,background:C.card2,border:`1px solid ${C.border}`}}>
+          <span style={{fontSize:12,color:i<3?C.gold:C.muted,width:18,fontWeight:700}}>{i+1}</span>
+          <div style={{flex:1,minWidth:0}}><p style={{margin:"0 0 2px",fontSize:13,fontWeight:600,color:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.title}</p><p style={{margin:0,fontSize:11,color:C.muted}}>상수 {s.c} · {fmt(s.score)}</p></div>
+          <div style={{textAlign:"right"}}><Bx rank={getRank(s.score)} size={12} C={C} RC={RC}/><p style={{margin:"2px 0 0",fontSize:11,color:C.purple,fontWeight:700}}>{calcR(s.score,s.c).toFixed(4)}</p></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function App(){
+  const[tab,setTab]=useState("home");
+  const[songs,setSongs]=useState(()=>LS.get("songs",SD));
+  const[checklist,setChecklist]=useState(()=>LS.get("cl",{}));
+  const[uniImg,setUniImg]=useState(()=>LS.get("uniImg",null));
+  const[theme,setTheme]=useState(()=>LS.get("theme","dark"));
+  const[nickname,setNickname]=useState(()=>LS.get("nick","MilK+TEA"));
+  const[recCache,setRecCache]=useState(()=>LS.get("rc",{}));
+  const C=TH[theme];
+  const RC=theme==="dark"?RCD:RCL;
+
+  useEffect(()=>{
+    const tk=getDK();
+    if(!recCache[tk]){const rec=getRec(songs,tk);const up={...recCache,[tk]:rec};setRecCache(up);LS.set("rc",up);}
+  },[]);
+
+  const addPlan=items=>{
+    const today=new Date().toISOString().slice(0,10);
+    const ni=items.map((label,i)=>({id:Date.now()+i,label,songId:null,goalScore:null,checked:false}));
+    const up={...checklist,[today]:[...(checklist[today]||[]),...ni]};
+    setChecklist(up);LS.set("cl",up);setTab("home");
+  };
+
+  const tabs=[{id:"home",icon:"🏠",label:"홈"},{id:"songs",icon:"🎵",label:"곡 목록"},{id:"ai",uni:true,label:"Uni"},{id:"stats",icon:"📊",label:"통계"},{id:"my",icon:"👤",label:"마이"}];
+
+  return(
+    <div style={{width:"100vw",height:"100dvh",display:"flex",justifyContent:"center",alignItems:"center",background:"#000"}}>
+      <div style={{width:"min(100vw, calc(100dvh * 9/16))",height:"100dvh",display:"flex",flexDirection:"column",background:C.bg,fontFamily:"'Segoe UI',sans-serif",color:C.text,overflow:"hidden"}}>
+        <div style={{background:TH[theme].card,padding:"14px 16px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:36,height:36,borderRadius:10,background:`linear-gradient(135deg,${C.purple},${C.pink})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>👑</div>
+            <div>
+              <p style={{margin:0,fontSize:16,fontWeight:900,background:`linear-gradient(135deg,${C.purple},${C.purpleL})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>CHUNITHM</p>
+              <p style={{margin:0,fontSize:10,color:C.muted,letterSpacing:1}}>PLANNER</p>
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{textAlign:"right"}}>
+              <p style={{margin:0,fontSize:13,color:C.white,fontWeight:700}}>Best {calcBest(songs).toFixed(4)}</p>
+              <p style={{margin:0,fontSize:11,color:C.muted}}>→ {getRange(calcBest(songs)).to.toFixed(2)}</p>
+            </div>
+            <button onClick={()=>{
+              const html=document.documentElement.outerHTML;
+              const blob=new Blob([html],{type:"text/html"});
+              const a=document.createElement("a");
+              a.href=URL.createObjectURL(blob);
+              a.download="CHUNITHM_Planner.html";
+              a.click();
+            }} title="HTML로 저장" style={{background:`linear-gradient(135deg,${C.purple},${C.purpleL})`,border:"none",borderRadius:8,color:"#fff",fontSize:16,cursor:"pointer",padding:"6px 8px",lineHeight:1}}>⬇️</button>
+          </div>
+        </div>
+        <div style={{flex:1,overflowY:"auto",paddingTop:14}}>
+          {tab==="home"&&<HomeTab songs={songs} C={C} RC={RC} checklist={checklist} setChecklist={setChecklist} uniImg={uniImg} recCache={recCache} setRecCache={setRecCache}/>}
+          {tab==="songs"&&<SongListTab songs={songs} setSongs={setSongs} C={C} RC={RC}/>}
+          {tab==="ai"&&<AITab songs={songs} onAddPlan={addPlan} C={C} uniImg={uniImg} recCache={recCache}/>}
+          {tab==="stats"&&<StatsTab songs={songs} C={C} RC={RC} recCache={recCache}/>}
+          {tab==="my"&&<MyTab songs={songs} setSongs={setSongs} C={C} RC={RC} uniImg={uniImg} setUniImg={setUniImg} theme={theme} setTheme={setTheme} nickname={nickname} setNickname={setNickname} recCache={recCache}/>}
+        </div>
+        <div style={{background:TH[theme].card,display:"flex",borderTop:`1px solid ${C.border}`,padding:"8px 0 12px",flexShrink:0}}>
+          {tabs.map(t=>(
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"4px 0"}}>
+              {t.uni?<UniIcon size={tab===t.id?28:24} imgSrc={uniImg}/>:<span style={{fontSize:20,opacity:tab===t.id?1:0.5}}>{t.icon}</span>}
+              <span style={{fontSize:10,fontWeight:tab===t.id?700:400,color:tab===t.id?C.purple:C.muted}}>{t.label}</span>
+              {tab===t.id&&<div style={{width:16,height:2,background:C.purple,borderRadius:99}}/>}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
